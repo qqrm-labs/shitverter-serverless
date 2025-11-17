@@ -2,7 +2,7 @@ use anyhow::Result as AnyResult;
 use teloxide::prelude::*;
 use tokio::fs;
 
-/// Скачивает файл с серверов Telegram по его идентификатору.
+/// Downloads a Telegram file by its identifier and persists it locally.
 pub async fn download_file(bot: &Bot, file_id: &str) -> AnyResult<String> {
     let file = bot.get_file(file_id).send().await?;
     let download_url = format!(
@@ -15,4 +15,4 @@ pub async fn download_file(bot: &Bot, file_id: &str) -> AnyResult<String> {
     let content = response.bytes().await?;
     fs::write(&file_path, &content).await?;
     Ok(file_path)
-} 
+}

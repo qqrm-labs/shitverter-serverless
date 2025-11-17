@@ -5,8 +5,8 @@ use teloxide::{
 };
 use tokio::{fs, task};
 
-use crate::telegram::download_file;
 use crate::converter::convert_webm_to_mp4;
+use crate::telegram::download_file;
 
 pub async fn process_webm(bot: &Bot, msg: &Message) -> AnyResult<()> {
     let MessageKind::Common(common) = &msg.kind else {
@@ -23,19 +23,19 @@ pub async fn process_webm(bot: &Bot, msg: &Message) -> AnyResult<()> {
         return Ok(());
     };
 
-    // Скачиваем файл.
+    // Download the original file from Telegram.
     let file_path = download_file(bot, &document.document.file.id).await?;
 
-    // Клонируем file_path для передачи в замыкание, чтобы оригинал оставался доступен
+    // Clone the file path so the blocking task owns its own copy.
     let file_path_clone = file_path.clone();
 
-    // Конвертация файла выполняется в отдельном блокирующем потоке.
+    // Convert the file in a blocking worker to keep the runtime responsive.
     let join_result = task::spawn_blocking(move || convert_webm_to_mp4(&file_path_clone))
         .await
         .context("Failed to join blocking task")?;
     let converted_file_path = join_result.context("FFmpeg conversion failed")?;
-    
-    // Формируем запрос на отправку видео.
+
+    // Build the request for sending the converted video back.
     let mut send_video_request = bot
         .send_video(msg.chat.id, InputFile::file(&converted_file_path))
         .disable_notification(true);
@@ -62,10 +62,10 @@ pub async fn process_webm(bot: &Bot, msg: &Message) -> AnyResult<()> {
     send_video_request = send_video_request.parse_mode(ParseMode::MarkdownV2);
     send_video_request.await?;
 
-    // Удаляем оригинальное сообщение.
+    // Remove the original message to keep the chat tidy.
     bot.delete_message(msg.chat.id, msg.id).await?;
 
-    // Асинхронное удаление временных файлов с логированием ошибок.
+    // Clean up temporary files asynchronously while logging failures.
     if let Err(e) = fs::remove_file(&file_path).await {
         log::error!("Error deleting file {}: {:?}", file_path, e);
     }
@@ -74,4 +74,4 @@ pub async fn process_webm(bot: &Bot, msg: &Message) -> AnyResult<()> {
     }
 
     Ok(())
-} 
+}
