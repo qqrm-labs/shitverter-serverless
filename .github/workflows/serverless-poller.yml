@@ -22,6 +22,25 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
@@ -56,7 +75,7 @@ jobs:
           TELEGRAM_UPDATE_OFFSET: ${{ steps.offset.outputs.value }}
         run: |
           set -o pipefail
-          output=$(cargo run --release --quiet)
+          output=$(cargo run --release --locked --quiet)
           echo "$output"
           last_id=$(echo "$output" | grep -o 'LAST_UPDATE_ID=[0-9]*' | tail -n1 | cut -d= -f2)
           if [ -n "$last_id" ]; then
