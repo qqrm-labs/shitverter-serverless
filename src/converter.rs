@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result as AnyResult};
+use anyhow::{Result as AnyResult, anyhow};
 use std::process::Command;
 
-/// Конвертирует файл `.webm` в формат `.mp4` с помощью FFmpeg.
+/// Converts a `.webm` file into `.mp4` using FFmpeg.
 pub fn convert_webm_to_mp4(file_path: &str) -> AnyResult<String> {
     let output_path = format!("{}.mp4", file_path);
     let output = Command::new("ffmpeg")
@@ -11,4 +11,4 @@ pub fn convert_webm_to_mp4(file_path: &str) -> AnyResult<String> {
         return Err(anyhow!("FFmpeg conversion failed: {:?}", output));
     }
     Ok(output_path)
-} 
+}

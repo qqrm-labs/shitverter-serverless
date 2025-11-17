@@ -1,0 +1,78 @@
+name: Serverless Telegram Poller
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Load update offset
+        id: offset
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const name = 'TELEGRAM_UPDATE_OFFSET';
+            try {
+              const { data } = await github.rest.actions.getRepoVariable({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name,
+              });
+              core.info(`Loaded stored offset ${data.value}.`);
+              core.setOutput('value', data.value);
+            } catch (error) {
+              if (error.status === 404) {
+                core.info('No stored offset found; starting from the first available update.');
+                core.setOutput('value', '');
+              } else {
+                throw error;
+              }
+            }
+
+      - name: Run serverless poller
+        id: poll
+        env:
+          TELOXIDE_TOKEN: ${{ secrets.TELOXIDE_TOKEN }}
+          SERVERLESS_RUN: "true"
+          TELEGRAM_UPDATE_OFFSET: ${{ steps.offset.outputs.value }}
+        run: |
+          set -o pipefail
+          output=$(cargo run --release --quiet)
+          echo "$output"
+          last_id=$(echo "$output" | grep -o 'LAST_UPDATE_ID=[0-9]*' | tail -n1 | cut -d= -f2)
+          if [ -n "$last_id" ]; then
+            echo "last_id=$last_id" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Persist update offset
+        if: steps.poll.outputs.last_id != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lastId = '${{ steps.poll.outputs.last_id }}';
+            await github.rest.actions.createOrUpdateRepoVariable({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'TELEGRAM_UPDATE_OFFSET',
+              value: lastId,
+            });
+            core.info(`Persisted offset ${lastId}.`);
